@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
-import { applyToJob, createJob, saveJob, saveProfile as saveProfileToBackend } from "@/lib/homelink-data";
+import { applyToJob, createJob, getProfile, listApplicationJobIds, listJobs, listSavedJobIds, removeSavedJob, saveJob, saveProfile as saveProfileToBackend } from "@/lib/homelink-data";
 
 type Role = "worker" | "household" | "broker";
 type AuthMode = "signup" | "login";
@@ -75,6 +75,7 @@ export default function Home() {
   const [brokerSaved, setBrokerSaved] = useState(false);
   const [brokerPlacement, setBrokerPlacement] = useState<string[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [marketplaceJobs, setMarketplaceJobs] = useState(jobs);
   const t = copy[language];
   const w = language === "am" ? { ...workspaceCopy.en, ...workspaceCopy.am, ...amWorkspaceCopy } : workspaceCopy.en;
 
@@ -100,16 +101,54 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!createSupabaseBrowserClient()) return;
+    void listJobs().then(({ data, error }) => {
+      if (error || !data?.length) return;
+      setMarketplaceJobs(data.map((job) => ({
+        id: job.id,
+        title: job.title,
+        location: job.location,
+        pay: `ETB ${Number(job.salary).toLocaleString()}`,
+        type: job.job_type.replaceAll("_", "-"),
+        skill: job.skill,
+        posted: new Date(job.created_at).toLocaleDateString(),
+        initials: job.title.slice(0, 2).toUpperCase(),
+        verified: true,
+        rating: "-",
+      })));
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    void Promise.all([listSavedJobIds(userId), listApplicationJobIds(userId), getProfile(userId)]).then(([savedResult, applicationResult, profileResult]) => {
+      if (!savedResult.error) {
+        const savedIds = savedResult.data?.map((item) => item.job_id) ?? [];
+        setSaved(marketplaceJobs.filter((job) => savedIds.includes(job.id)).map((job) => job.title));
+      }
+      if (!applicationResult.error) {
+        const applicationIds = applicationResult.data?.map((item) => item.job_id) ?? [];
+        setAppliedJobs(marketplaceJobs.filter((job) => applicationIds.includes(job.id)).map((job) => job.title));
+      }
+      if (!profileResult.error && profileResult.data) {
+        setProfile((current) => ({ ...current, name: profileResult.data.full_name ?? current.name, location: profileResult.data.location ?? current.location, skill: profileResult.data.skills?.[0] ?? current.skill, experience: profileResult.data.experience_years ? `${profileResult.data.experience_years} years` : current.experience, salary: profileResult.data.expected_salary ? `ETB ${profileResult.data.expected_salary}` : current.salary, availability: profileResult.data.availability ?? current.availability }));
+        setProfileSaved(profileResult.data.verification_status === "verified");
+      }
+    });
+  }, [userId, marketplaceJobs]);
+
   const visibleJobs = useMemo(() => {
-    const filtered = jobs.filter((job) => `${job.title} ${job.location} ${job.skill}`.toLowerCase().includes(query.toLowerCase()) && (jobType === "All types" || job.type === jobType) && (jobSkill === "All skills" || job.skill === jobSkill));
+    const filtered = marketplaceJobs.filter((job) => `${job.title} ${job.location} ${job.skill}`.toLowerCase().includes(query.toLowerCase()) && (jobType === "All types" || job.type === jobType) && (jobSkill === "All skills" || job.skill === jobSkill));
     return showAll ? filtered : filtered.slice(0, 3);
-  }, [query, jobType, jobSkill, showAll]);
+  }, [marketplaceJobs, query, jobType, jobSkill, showAll]);
 
   async function toggleSaved(title: string) {
-    setSaved((current) => current.includes(title) ? current.filter((item) => item !== title) : [...current, title]);
-    const job = jobs.find((item) => item.title === title);
+    const job = marketplaceJobs.find((item) => item.title === title);
+    const isSaved = saved.includes(title);
+    setSaved((current) => isSaved ? current.filter((item) => item !== title) : [...current, title]);
     if (!job || !userId || job.id.startsWith("demo-")) return;
-    const { error } = await saveJob(job.id, userId);
+    const { error } = isSaved ? await removeSavedJob(job.id, userId) : await saveJob(job.id, userId);
     if (error) setAuthError(error.message);
   }
 
@@ -119,6 +158,13 @@ export default function Home() {
     setPassword("");
     setOtp("");
     setAuthError("");
+  }
+
+  async function signOut() {
+    const supabase = createSupabaseBrowserClient();
+    if (supabase) await supabase.auth.signOut();
+    setUserId(null);
+    setIsSignedIn(false);
   }
 
   async function submitAuth(event: React.FormEvent<HTMLFormElement>) {
@@ -169,7 +215,7 @@ export default function Home() {
 
   async function applyForJob(title: string) {
     if (!appliedJobs.includes(title)) setAppliedJobs((current) => [...current, title]);
-    const job = jobs.find((item) => item.title === title);
+    const job = marketplaceJobs.find((item) => item.title === title);
     if (!job || !userId || job.id.startsWith("demo-")) return;
     const { error } = await applyToJob(job.id, userId);
     if (error) setAuthError(error.message);
@@ -254,7 +300,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-3">
           <div className="language-switch" aria-label="Language switcher"><button onClick={() => setLanguage("en")} className={language === "en" ? "active" : ""}>EN</button><button onClick={() => setLanguage("am")} className={language === "am" ? "active" : ""}>አማ</button></div>
-          {isSignedIn ? <button onClick={() => setIsSignedIn(false)} className="rounded-full border border-[#d4d7ce] bg-white px-4 py-2.5 text-sm font-semibold text-[#193f34]">{w.signOut}</button> : <><button onClick={() => openAuth("login")} className="hidden px-3 py-2 text-sm font-semibold text-[#65706b] sm:block">{t.login}</button><button onClick={() => openAuth("signup")} className="rounded-full bg-[#193f34] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#28594b]">{t.join}</button></>}
+          {isSignedIn ? <button onClick={() => void signOut()} className="rounded-full border border-[#d4d7ce] bg-white px-4 py-2.5 text-sm font-semibold text-[#193f34]">{w.signOut}</button> : <><button onClick={() => openAuth("login")} className="hidden px-3 py-2 text-sm font-semibold text-[#65706b] sm:block">{t.login}</button><button onClick={() => openAuth("signup")} className="rounded-full bg-[#193f34] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#28594b]">{t.join}</button></>}
         </div>
       </nav>
 

@@ -13,6 +13,12 @@ export interface JobInput {
   salary: number;
 }
 
+export interface JobRecord extends JobInput {
+  id: string;
+  createdAt: string;
+  isActive: boolean;
+}
+
 export interface ProfileInput {
   id: string;
   role: "worker" | "household" | "broker" | "admin";
@@ -26,6 +32,16 @@ export interface ProfileInput {
   experienceDocumentPath?: string;
   guarantorName?: string;
   guarantorDocumentPath?: string;
+}
+
+export interface BusinessProfileInput {
+  id: string;
+  businessName: string;
+  ownerName: string;
+  address: string;
+  phone: string;
+  licenseNumber: string;
+  licenseDocumentPath: string;
 }
 
 function getClient() {
@@ -76,6 +92,21 @@ export async function listJobs(filters?: { skill?: string; location?: string; jo
   return query;
 }
 
+export async function listSavedJobIds(workerId: string) {
+  const client = getClient();
+  return client.from("saved_jobs").select("job_id").eq("worker_id", workerId);
+}
+
+export async function listApplicationJobIds(workerId: string) {
+  const client = getClient();
+  return client.from("applications").select("job_id").eq("worker_id", workerId);
+}
+
+export async function getProfile(userId: string) {
+  const client = getClient();
+  return client.from("profiles").select("*").eq("id", userId).maybeSingle();
+}
+
 export async function applyToJob(jobId: string, workerId: string, coverMessage = "") {
   const client = getClient();
   return client.from("applications").insert({ job_id: jobId, worker_id: workerId, cover_message: coverMessage }).select().single();
@@ -86,12 +117,56 @@ export async function saveJob(jobId: string, workerId: string) {
   return client.from("saved_jobs").upsert({ job_id: jobId, worker_id: workerId });
 }
 
+export async function removeSavedJob(jobId: string, workerId: string) {
+  const client = getClient();
+  return client.from("saved_jobs").delete().eq("job_id", jobId).eq("worker_id", workerId);
+}
+
+export async function saveBusinessProfile(input: BusinessProfileInput) {
+  const client = getClient();
+  return client.from("business_profiles").upsert({
+    id: input.id,
+    business_name: input.businessName,
+    owner_name: input.ownerName,
+    address: input.address,
+    phone: input.phone,
+    license_number: input.licenseNumber,
+    license_document_path: input.licenseDocumentPath,
+    verification_status: "pending",
+  });
+}
+
+export async function updateApplicationStatus(applicationId: string, status: "submitted" | "shortlisted" | "interview" | "hired" | "rejected" | "withdrawn") {
+  const client = getClient();
+  return client.from("applications").update({ status }).eq("id", applicationId);
+}
+
 export async function createMessage(senderId: string, recipientId: string, body: string, applicationId?: string) {
   const client = getClient();
   return client.from("messages").insert({ sender_id: senderId, recipient_id: recipientId, body, application_id: applicationId }).select().single();
 }
 
+export async function listMessages(userId: string) {
+  const client = getClient();
+  return client.from("messages").select("*").or(`sender_id.eq.${userId},recipient_id.eq.${userId}`).order("created_at", { ascending: true });
+}
+
 export async function scheduleInterview(applicationId: string, scheduledAt: string, meetingNote = "") {
   const client = getClient();
   return client.from("interviews").insert({ application_id: applicationId, scheduled_at: scheduledAt, meeting_note: meetingNote }).select().single();
+}
+
+export async function createReview(authorId: string, subjectId: string, rating: number, comment: string, placementId?: string) {
+  const client = getClient();
+  return client.from("reviews").insert({ author_id: authorId, subject_id: subjectId, rating, comment, placement_id: placementId }).select().single();
+}
+
+export async function listNotifications(userId: string) {
+  const client = getClient();
+  return client.from("notifications").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+}
+
+export async function markNotificationRead(notificationId: string, userId: string) {
+  const client = getClient();
+  return client.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", notificationId).eq("user_id", userId);
 }
