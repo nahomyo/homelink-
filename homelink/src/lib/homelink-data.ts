@@ -21,7 +21,7 @@ export interface JobRecord extends JobInput {
 
 export interface ProfileInput {
   id: string;
-  role: "worker" | "household" | "broker" | "admin";
+  role: "worker" | "household" | "broker";
   fullName: string;
   phone?: string;
   location?: string;
@@ -42,54 +42,6 @@ export interface BusinessProfileInput {
   phone: string;
   licenseNumber: string;
   licenseDocumentPath: string;
-}
-
-export type VerificationStatus = "pending" | "verified" | "rejected";
-export type ReportStatus = "open" | "investigating" | "resolved" | "dismissed";
-
-export async function listAdminProfiles() {
-  const client = getClient();
-  return client.from("profiles").select("id, role, full_name, phone, location, verification_status, is_suspended, created_at").order("created_at", { ascending: false });
-}
-
-export async function setProfileVerification(profileId: string, verificationStatus: VerificationStatus) {
-  const client = getClient();
-  return client.from("profiles").update({ verification_status: verificationStatus, updated_at: new Date().toISOString() }).eq("id", profileId);
-}
-
-export async function setProfileSuspended(profileId: string, isSuspended: boolean) {
-  const client = getClient();
-  return client.from("profiles").update({ is_suspended: isSuspended, updated_at: new Date().toISOString() }).eq("id", profileId);
-}
-
-export async function listAdminJobs() {
-  const client = getClient();
-  return client.from("jobs").select("id, title, skill, location, salary, is_active, created_at, employer_id").order("created_at", { ascending: false });
-}
-
-export async function setJobActive(jobId: string, isActive: boolean) {
-  const client = getClient();
-  return client.from("jobs").update({ is_active: isActive }).eq("id", jobId);
-}
-
-export async function listAdminReports() {
-  const client = getClient();
-  return client.from("reports").select("*").order("created_at", { ascending: false });
-}
-
-export async function updateReportStatus(reportId: string, status: ReportStatus) {
-  const client = getClient();
-  return client.from("reports").update({ status, resolved_at: status === "resolved" || status === "dismissed" ? new Date().toISOString() : null }).eq("id", reportId);
-}
-
-export async function listAdminPlacements() {
-  const client = getClient();
-  return client.from("placements").select("*").order("created_at", { ascending: false });
-}
-
-export async function listAdminCommissions() {
-  const client = getClient();
-  return client.from("commissions").select("*").order("created_at", { ascending: false });
 }
 
 function getClient() {

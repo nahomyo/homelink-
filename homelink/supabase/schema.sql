@@ -1,7 +1,7 @@
 -- HomeLink database schema
 -- Run in Supabase SQL Editor. RLS policies keep each role scoped to its own data.
 
-create type public.user_role as enum ('worker', 'household', 'broker', 'admin');
+create type public.user_role as enum ('worker', 'household', 'broker');
 create type public.verification_status as enum ('pending', 'verified', 'rejected');
 create type public.job_type as enum ('full_time', 'part_time', 'weekend', 'live_in', 'live_out');
 create type public.application_status as enum ('submitted', 'shortlisted', 'interview', 'hired', 'rejected', 'withdrawn');
@@ -22,7 +22,6 @@ create table public.profiles (
   guarantor_name text,
   guarantor_document_path text,
   verification_status public.verification_status not null default 'pending',
-  is_suspended boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -133,21 +132,6 @@ create table public.notifications (
   created_at timestamptz not null default now()
 );
 
-create type public.report_status as enum ('open', 'investigating', 'resolved', 'dismissed');
-
-create table public.reports (
-  id uuid primary key default gen_random_uuid(),
-  reporter_id uuid not null references public.profiles(id) on delete cascade,
-  reported_user_id uuid references public.profiles(id) on delete cascade,
-  reported_job_id uuid references public.jobs(id) on delete cascade,
-  reason text not null,
-  details text not null default '',
-  status public.report_status not null default 'open',
-  resolved_at timestamptz,
-  created_at timestamptz not null default now(),
-  check (reported_user_id is not null or reported_job_id is not null)
-);
-
 alter table public.profiles enable row level security;
 alter table public.business_profiles enable row level security;
 alter table public.jobs enable row level security;
@@ -159,11 +143,6 @@ alter table public.placements enable row level security;
 alter table public.commissions enable row level security;
 alter table public.reviews enable row level security;
 alter table public.notifications enable row level security;
-alter table public.reports enable row level security;
-
-create or replace function public.is_admin() returns boolean language sql security definer set search_path = public stable as $$
-  select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin' and is_suspended = false);
-$$;
 
 create policy "profiles are publicly readable" on public.profiles for select using (true);
 create policy "users manage own profile" on public.profiles for all using (auth.uid() = id) with check (auth.uid() = id);
@@ -181,14 +160,6 @@ create policy "commission participants read records" on public.commissions for s
 create policy "participants manage reviews" on public.reviews for all using (auth.uid() = author_id) with check (auth.uid() = author_id);
 create policy "users read own notifications" on public.notifications for select using (auth.uid() = user_id);
 create policy "users update own notifications" on public.notifications for update using (auth.uid() = user_id);
-create policy "users create reports" on public.reports for insert with check (auth.uid() = reporter_id);
-create policy "reporters read own reports" on public.reports for select using (auth.uid() = reporter_id);
-create policy "admins manage reports" on public.reports for all using (public.is_admin()) with check (public.is_admin());
-create policy "admins manage profiles" on public.profiles for update using (public.is_admin()) with check (public.is_admin());
-create policy "admins read business profiles" on public.business_profiles for select using (public.is_admin());
-create policy "admins manage jobs" on public.jobs for update using (public.is_admin()) with check (public.is_admin());
-create policy "admins read placements" on public.placements for select using (public.is_admin());
-create policy "admins read commissions" on public.commissions for select using (public.is_admin());
 
 create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path = public as $$
 begin
