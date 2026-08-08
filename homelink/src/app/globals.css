@@ -143,6 +143,12 @@ button {
   transform: translateY(-1px);
 }
 
+.quick-search input:focus-visible,
+.quick-search-action:focus-visible {
+  outline: 3px solid #e8b690;
+  outline-offset: 2px;
+}
+
 .quick-search-chip {
   border-radius: 999px;
   background: #eaf0e8;
