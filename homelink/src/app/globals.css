@@ -107,6 +107,54 @@ button {
   background: #c6d5c3;
 }
 
+.quick-search {
+  animation: search-arrive .65s ease-out both;
+  border: 1px solid rgba(25, 63, 52, .12);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, .76);
+  box-shadow: 0 14px 30px rgba(45, 67, 52, .08);
+  padding: .75rem;
+}
+
+.quick-search-icon {
+  display: grid;
+  height: 2rem;
+  width: 2rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: .7rem;
+  background: #fff0e9;
+  color: #b45d3c;
+  font-size: 1.15rem;
+}
+
+.quick-search-action {
+  border-radius: .7rem;
+  background: #d97952;
+  color: white;
+  font-size: .75rem;
+  font-weight: 700;
+  padding: .65rem .8rem;
+  transition: background .2s ease, transform .2s ease;
+}
+
+.quick-search-action:hover {
+  background: #b85f3e;
+  transform: translateY(-1px);
+}
+
+.quick-search-chip {
+  border-radius: 999px;
+  background: #eaf0e8;
+  color: #42705c;
+  padding: .3rem .55rem;
+}
+
+@keyframes search-arrive {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .workspace-nav {
   display: flex;
   width: 100%;
